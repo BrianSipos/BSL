@@ -298,7 +298,15 @@ typedef enum
     /// HMAC SHA2-384 with 384-bit key
     BSL_CRYPTO_SHA_384,
     /// HMAC SHA2-512 with 512-bit key
-    BSL_CRYPTO_SHA_512
+    BSL_CRYPTO_SHA_512,
+    /// AES-CMAC with 128-bit key
+    BSL_CRYPTO_CMAC_AES_128,
+    /// AES-CMAC with 256-bit key
+    BSL_CRYPTO_CMAC_AES_256,
+    /// AES-GMAC with 128-bit key
+    BSL_CRYPTO_GMAC_AES_128,
+    /// AES-GMAC with 256-bit key
+    BSL_CRYPTO_GMAC_AES_256,
 } BSL_Crypto_SHAVariant_e;
 
 /**
@@ -328,11 +336,11 @@ typedef struct BSL_AuthCtx_s
  * @param[in,out] hmac_ctx pointer to hmac context struct to init and set
  * @param[in] keyhandle handle for key to use.
  * The HMAC context keeps its own reference to this handle.
- * @param[in] sha_var SHA variant, see RFC9173 @cite rfc9173
+ * @param[in] variant MAC variant to use.
  * @return 0 if successful
  */
 BSL_REQUIRE_CHECK
-int BSL_AuthCtx_Init(BSL_AuthCtx_t *hmac_ctx, BSL_Crypto_KeyHandle_t keyhandle, BSL_Crypto_SHAVariant_e sha_var);
+int BSL_AuthCtx_Init(BSL_AuthCtx_t *hmac_ctx, BSL_Crypto_KeyHandle_t keyhandle, BSL_Crypto_SHAVariant_e variant);
 
 /**
  * Input data to HMAC sign to context

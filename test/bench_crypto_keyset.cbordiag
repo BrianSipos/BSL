@@ -19,19 +19,34 @@
   },
   {
     / kty / 1: 4, / symmetric /
-    / kid / 2: 'hmac-256',
+    / kid / 2: 'cmac-aes-128',
+    / k / -1: h'33ef5c399e5163c086e7006c2be7d7cb'
+  },
+  {
+    / kty / 1: 4, / symmetric /
+    / kid / 2: 'cmac-aes-192',
+    / k / -1: h'49ce21cd9457d711dd3e4659e254a13d0c1374d86dc06fd7'
+  },
+  {
+    / kty / 1: 4, / symmetric /
+    / kid / 2: 'cmac-aes-256',
+    / k / -1: h'fd876a2523ed927ca6387a4e594f47a7b38b5b083175797dbf2491d04571da54'
+  },
+  {
+    / kty / 1: 4, / symmetric /
+    / kid / 2: 'hmac-sha2-256',
     / alg / 3: 5,
     / k / -1: h'fa5686e78eb358646aa7a87c57ea528e9527c00ee7685cad9f3835e1f758fd2c'
   },
   {
     / kty / 1: 4, / symmetric /
-    / kid / 2: 'hmac-384',
+    / kid / 2: 'hmac-sha2-384',
     / alg / 3: 6,
     / k / -1: h'b35fc255f6014e3d9e74d5b5bbe891260e5da7774c68e6fbcae2493c95379bd635e74dd4a6a83158b9b6c946061016aa'
   },
   {
     / kty / 1: 4, / symmetric /
-    / kid / 2: 'hmac-512',
+    / kid / 2: 'hmac-sha2-512',
     / alg / 3: 7,
     / k / -1: h'594ba6a94bc85e463f6cf42d4db0e135f243a510e7497b3dc04c8d8481583b2c46cefcd7497feb8769bea85b5e8db9545a593e7ce7c4364bf7704cad8bd9dd15'
   },
@@ -73,15 +88,6 @@
     -2:h'e73b1a0a563e7bbf447e5f293d77f28915d1306c153580ddedc4ab9c4e29a5d2',
     -3:h'5f124bc24e7e18fce0ba4813625b19509890ba43c62a7e4bc2ec859325d3b671',
     -4:h'f8366a4ab545dbc5be51f413cc03d74b0af311125119ecd405c54b055b4756f8'
-  },
-  {
-    / kty / 1: 2, / EC2 /
-    / kid / 2: 'esp256-badcrv',
-    / alg / 3: -9,
-    -1:2,
-    -2:h'4ae0896ca818ca00f235444b7ad75c1e4d06e81a0e345a568c37e9939c7f1dee5186b447abee3c5e3b1c5ac33a33d2a0',
-    -3:h'a173fb8c99da06cf8bb653cb9257ee19fafc0b7ff4cf4b5ea95baae01a1226c5f5499d4f82f846fb622949d94745077f',
-    -4:h'ef389c5c02cbaef78a24a5191df1ffb077e624a96b8eb686b698e528b55b3297958f5de8788c921ba57a6acbf646d62b'
   },
   {
     / kty / 1: 2, / EC2 /

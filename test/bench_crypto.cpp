@@ -321,13 +321,25 @@ static void BM_MAC(benchmark::State &state, BSL_Crypto_SHAVariant_e variant, con
     state.SetComplexityN(bign);
 }
 // clang-format off
-BENCHMARK_CAPTURE(BM_MAC, HMAC_SHA2_256, BSL_CRYPTO_SHA_256, "hmac-256")
+BENCHMARK_CAPTURE(BM_MAC, HMAC_SHA2_256, BSL_CRYPTO_SHA_256, "hmac-sha2-256")
     ->Range(1 << 10, 1 << 20)
     ->Complexity(benchmark::oN);
-BENCHMARK_CAPTURE(BM_MAC, HMAC_SHA2_384, BSL_CRYPTO_SHA_384, "hmac-384")
+BENCHMARK_CAPTURE(BM_MAC, HMAC_SHA2_384, BSL_CRYPTO_SHA_384, "hmac-sha2-384")
     ->Range(1 << 10, 1 << 20)
     ->Complexity(benchmark::oN);
-BENCHMARK_CAPTURE(BM_MAC, HMAC_SHA2_512, BSL_CRYPTO_SHA_512, "hmac-512")
+BENCHMARK_CAPTURE(BM_MAC, HMAC_SHA2_512, BSL_CRYPTO_SHA_512, "hmac-sha2-512")
+    ->Range(1 << 10, 1 << 20)
+    ->Complexity(benchmark::oN);
+BENCHMARK_CAPTURE(BM_MAC, CMAC_AES_128, BSL_CRYPTO_CMAC_AES_128, "cmac-aes-128")
+    ->Range(1 << 10, 1 << 20)
+    ->Complexity(benchmark::oN);
+BENCHMARK_CAPTURE(BM_MAC, CMAC_AES_256, BSL_CRYPTO_CMAC_AES_256, "cmac-aes-256")
+    ->Range(1 << 10, 1 << 20)
+    ->Complexity(benchmark::oN);
+BENCHMARK_CAPTURE(BM_MAC, GMAC_AES_128, BSL_CRYPTO_GMAC_AES_128, "cmac-aes-128")
+    ->Range(1 << 10, 1 << 20)
+    ->Complexity(benchmark::oN);
+BENCHMARK_CAPTURE(BM_MAC, GMAC_AES_256, BSL_CRYPTO_GMAC_AES_256, "cmac-aes-256")
     ->Range(1 << 10, 1 << 20)
     ->Complexity(benchmark::oN);
 // clang-format on
