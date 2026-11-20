@@ -68,6 +68,18 @@ typedef struct
     uint64_t stats[BSL_CRYPTO_KEYSTATS_MAX_INDEX];
 } BSL_Crypto_KeyStats_t;
 
+/** The signature of a user callback function to derive some cached data
+ * from a single key.
+ * This function is meant to be idempotent for each key and able to be called
+ * more than once, as needed when multiple threads access the same key.
+ * For each thread, this function will be called only once per key lifetime.
+ *
+ * @param[in] handle The handle to the specific key to cache for.
+ * @param[in] ctx An optional context pointer.
+ * @return An optional pointer to user data allocated for the key.
+ */
+typedef void * (*BSL_Crypto_KeyUserCache_f)(BSL_Crypto_KeyHandle_t handle, const void *ctx);
+
 /** The set of callback function pointers which actually implement
  * a key store.
  * When registering, all of the functions need to be non-NULL.
@@ -151,6 +163,16 @@ typedef struct
      */
     int (*get_stats)(BSL_Crypto_KeyHandle_t handle, BSL_Crypto_KeyStats_t *stats);
 
+    /** Populate a thread-safe user data cache for a single key.
+     *
+     * @param[in] handle The handle to the key.
+     * @param[in] user_cache The user function used to produce cache data.
+     * This pointer will never be null when this callback is called.
+     * @param[in] ctx The context passed to the @c user_cache function.
+     * @return The cached data pointer returned by @c user_cache function.
+     */
+    void *(*get_user_cache)(BSL_Crypto_KeyHandle_t handle, BSL_Crypto_KeyUserCache_f user_cache, const void *ctx);
+
 } BSL_KeyStore_Descriptors_t;
 
 /** Initialize the key store subsystem.
@@ -227,11 +249,21 @@ int BSL_Crypto_GetRegistryKey(const BSL_Data_t *keyid, BSL_Crypto_KeyHandle_t *h
 const BSL_Variant_t *BSL_Crypto_GetKeyParameter(BSL_Crypto_KeyHandle_t handle, int64_t param_id);
 
 /**
- * Retrieve statistics related to a crypto key
+ * Retrieve statistics related to a crypto key.
  * @param[in] handle The handle of a key in the crypto registry to retrieve the stats of.
  * @param[out] stats struct containing statistics related to the key id
  */
 int BSL_Crypto_GetKeyStatistics(BSL_Crypto_KeyHandle_t handle, BSL_Crypto_KeyStats_t *stats);
+
+/** Retrieve cached user data related to a key.
+ *
+ * @param[in] handle The handle to the key.
+ * @param[in] user_cache The user function used to produce cache data.
+ * If this pointer is null the return will also be null.
+ * @param[in] ctx The context passed to the @c user_cache function.
+ * @return The cached data pointer returned by @c user_cache function.
+ */
+void * BSL_Crypto_GetKeyUserCache(BSL_Crypto_KeyHandle_t handle, BSL_Crypto_KeyUserCache_f user_cache, const void *ctx);
 
 #ifdef __cplusplus
 } // extern C

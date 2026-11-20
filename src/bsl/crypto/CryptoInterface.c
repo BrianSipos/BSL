@@ -605,127 +605,87 @@ typedef struct
 
 } BSL_Crypto_ExtHash_Data_t;
 
-/** Shared signature context logic between signing and verifying.
- */
-static int BSL_SigCtx_CommonInit(BSL_SigCtx_t *ctx, EVP_PKEY **key, char **digest_name, bool nonce_deterministic)
+typedef struct
 {
-    int64_t alg_need_crv = 0; // fully specified algorithm curve
-    switch (ctx->variant)
-    {
-        case BSL_CRYPTO_ECDSA_P256_SHA_256:
-            ctx->mode    = BSL_CRYPTO_SIGNMODE_SEQUENTIAL;
-            alg_need_crv = BSL_CRYPTO_KEYPARAM_CRV_P256;
-            *digest_name = SN_sha256;
-            break;
-        case BSL_CRYPTO_ECDSA_P384_SHA_384:
-            ctx->mode    = BSL_CRYPTO_SIGNMODE_SEQUENTIAL;
-            alg_need_crv = BSL_CRYPTO_KEYPARAM_CRV_P384;
-            *digest_name = SN_sha384;
-            break;
-        case BSL_CRYPTO_ECDSA_P521_SHA_512:
-            ctx->mode    = BSL_CRYPTO_SIGNMODE_SEQUENTIAL;
-            alg_need_crv = BSL_CRYPTO_KEYPARAM_CRV_P521;
-            *digest_name = SN_sha512;
-            break;
-        case BSL_CRYPTO_MLDSA_44:
-        case BSL_CRYPTO_MLDSA_65:
-        case BSL_CRYPTO_MLDSA_87:
-        {
-#if OPENSSL_CAN_MLDSA // guard use of define names
-            ctx->mode = BSL_CRYPTO_SIGNMODE_EXTHASH;
-            // digest for data, not signature name
-            *digest_name = SN_shake256;
+    int64_t need_kty;
+    /// For EC2, the needed curve
+    int64_t need_crv;
+    /// For EC2, the coordinate length in bytes
+    size_t coord_len;
+    /// OpenSSL name for the signing algorithm
+    const char *sign_name;
+} BSL_AsyncKeyCache_Ctx_t;
 
-            BSL_Crypto_ExtHash_Data_t *libctx = BSL_malloc(sizeof(BSL_Crypto_ExtHash_Data_t));
-            ASSERT_PROPERTY(libctx != NULL);
-            memset(libctx, 0, sizeof(BSL_Crypto_ExtHash_Data_t));
-            // actual data
-            libctx->nonce_deterministic = nonce_deterministic;
-            // finalize signature name
-            if (ctx->variant == BSL_CRYPTO_MLDSA_44)
-            {
-                libctx->sign_name = SN_ML_DSA_44;
-            }
-            else if (ctx->variant == BSL_CRYPTO_MLDSA_65)
-            {
-                libctx->sign_name = SN_ML_DSA_65;
-            }
-            else if (ctx->variant == BSL_CRYPTO_MLDSA_87)
-            {
-                libctx->sign_name = SN_ML_DSA_87;
-            }
+/** Matches the BSL_Crypto_KeyUserCache_f signature to produce
+ * an EVP_PKEY pointer using an ::BSL_AsyncKeyCache_Ctx_t context.
+ */
+static EVP_PKEY *BSL_AsyncKeyCache(BSL_Crypto_KeyHandle_t handle, const BSL_AsyncKeyCache_Ctx_t *ctx)
+{
+    BSL_CHKNULL(handle);
+    BSL_CHKNULL(ctx);
 
-            ctx->libctx = libctx;
-            break;
-#else
-            // GCOV_EXCL_START
-            (void)nonce_deterministic;
-            return BSL_ERR_SECURITY_CONTEXT_CRYPTO_FAILED;
-            // GCOV_EXCL_STOP
-#endif // OPENSSL_CAN_MLDSA
-        }
-            // GCOV_EXCL_START
-        default:
-            BSL_LOG_ERR("Invalid sign variant %d", ctx->variant);
-            return BSL_ERR_SECURITY_CONTEXT_CRYPTO_FAILED;
-            // GCOV_EXCL_STOP
-    }
+    EVP_PKEY *key = NULL;
 
-    const BSL_Variant_t *key_kty_var = BSL_KeyStore_State.get_parameter(ctx->keyhandle, BSL_CRYPTO_KEYPARAM_KTY);
-    CHK_PRECONDITION(key_kty_var);
+    const BSL_Variant_t *key_kty_var = BSL_KeyStore_State.get_parameter(handle, BSL_CRYPTO_KEYPARAM_KTY);
+    BSL_CHKNULL(key_kty_var);
     int64_t key_kty;
-    CHK_PRECONDITION(BSL_SUCCESS == BSL_Variant_GetAsInt64(key_kty_var, &key_kty));
+    BSL_CHKNULL(BSL_SUCCESS == BSL_Variant_GetAsInt64(key_kty_var, &key_kty));
+    if (ctx->need_kty != key_kty)
+    {
+        BSL_LOG_ERR("Need kty %" PRId64 " but key has %" PRId64, ctx->need_kty, key_kty);
+        return NULL;
+    }
 
     if (key_kty == BSL_CRYPTO_KEYPARAM_TYPE_EC2)
     {
-        const BSL_Variant_t *key_crv_var =
-            BSL_KeyStore_State.get_parameter(ctx->keyhandle, BSL_CRYPTO_KEYPARAM_EC2_CRV);
-        CHK_PRECONDITION(key_crv_var);
+        const BSL_Variant_t *key_crv_var = BSL_KeyStore_State.get_parameter(handle, BSL_CRYPTO_KEYPARAM_EC2_CRV);
+        BSL_CHKNULL(key_crv_var);
         int64_t key_crv;
-        CHK_PRECONDITION(BSL_SUCCESS == BSL_Variant_GetAsInt64(key_crv_var, &key_crv));
-        CHK_PRECONDITION(key_crv == alg_need_crv);
+        BSL_CHKNULL(BSL_SUCCESS == BSL_Variant_GetAsInt64(key_crv_var, &key_crv));
+        if (ctx->need_crv != key_crv)
+        {
+            BSL_LOG_ERR("Need EC2 crv %" PRId64 " but key has %" PRId64, ctx->need_crv, key_crv);
+            return NULL;
+        }
 
         const char *grp_name = NULL;
         switch (key_crv)
         {
             case BSL_CRYPTO_KEYPARAM_CRV_P256:
                 grp_name       = "P-256";
-                ctx->coord_len = 32;
                 break;
             case BSL_CRYPTO_KEYPARAM_CRV_P384:
                 grp_name       = "P-384";
-                ctx->coord_len = 48;
                 break;
             case BSL_CRYPTO_KEYPARAM_CRV_P521:
                 grp_name       = "P-521";
-                ctx->coord_len = 66;
                 break;
             default:
-                return BSL_ERR_SECURITY_CONTEXT_CRYPTO_FAILED;
+                return NULL;
         }
 
-        const BSL_Variant_t *key_x_var = BSL_KeyStore_State.get_parameter(ctx->keyhandle, BSL_CRYPTO_KEYPARAM_EC2_X);
-        CHK_PRECONDITION(key_x_var);
+        const BSL_Variant_t *key_x_var = BSL_KeyStore_State.get_parameter(handle, BSL_CRYPTO_KEYPARAM_EC2_X);
+        BSL_CHKNULL(key_x_var);
         BSL_Data_t key_x;
-        CHK_PRECONDITION(BSL_SUCCESS == BSL_Variant_GetAsBytestr(key_x_var, &key_x));
-        CHK_PRECONDITION(key_x.len == ctx->coord_len);
+        BSL_CHKNULL(BSL_SUCCESS == BSL_Variant_GetAsBytestr(key_x_var, &key_x));
+        BSL_CHKNULL(key_x.len == ctx->coord_len);
 
-        const BSL_Variant_t *key_y_var = BSL_KeyStore_State.get_parameter(ctx->keyhandle, BSL_CRYPTO_KEYPARAM_EC2_Y);
-        CHK_PRECONDITION(key_y_var);
+        const BSL_Variant_t *key_y_var = BSL_KeyStore_State.get_parameter(handle, BSL_CRYPTO_KEYPARAM_EC2_Y);
+        BSL_CHKNULL(key_y_var);
         BSL_Data_t key_y;
-        CHK_PRECONDITION(BSL_SUCCESS == BSL_Variant_GetAsBytestr(key_y_var, &key_y));
-        CHK_PRECONDITION(key_y.len == ctx->coord_len);
+        BSL_CHKNULL(BSL_SUCCESS == BSL_Variant_GetAsBytestr(key_y_var, &key_y));
+        BSL_CHKNULL(key_y.len == ctx->coord_len);
 
-        const BSL_Variant_t *key_d_var = BSL_KeyStore_State.get_parameter(ctx->keyhandle, BSL_CRYPTO_KEYPARAM_EC2_D);
+        const BSL_Variant_t *key_d_var = BSL_KeyStore_State.get_parameter(handle, BSL_CRYPTO_KEYPARAM_EC2_D);
         // present only for private keys
         BSL_Data_t key_d = BSL_DATA_INIT_NULL;
         if (key_d_var)
         {
-            CHK_PRECONDITION(BSL_SUCCESS == BSL_Variant_GetAsBytestr(key_d_var, &key_d));
+            BSL_CHKNULL(BSL_SUCCESS == BSL_Variant_GetAsBytestr(key_d_var, &key_d));
         }
 
         OSSL_PARAM_BLD *param_bld = OSSL_PARAM_BLD_new();
-        CHK_PRECONDITION(param_bld);
+        BSL_CHKNULL(param_bld);
         OSSL_PARAM_BLD_push_utf8_string(param_bld, OSSL_PKEY_PARAM_GROUP_NAME, grp_name, 0);
 
         // SEC1 point buffer 0x04 || X || Y
@@ -745,14 +705,13 @@ static int BSL_SigCtx_CommonInit(BSL_SigCtx_t *ctx, EVP_PKEY **key, char **diges
 
         OSSL_PARAM *params = OSSL_PARAM_BLD_to_param(param_bld);
         OSSL_PARAM_BLD_free(param_bld);
-        CHK_PRECONDITION(params);
+        BSL_CHKNULL(params);
 
         EVP_PKEY_CTX *keyctx = EVP_PKEY_CTX_new_from_name(NULL, "EC", NULL);
-        CHK_PRECONDITION(keyctx);
-        CHK_PRECONDITION(1 == EVP_PKEY_fromdata_init(keyctx));
+        BSL_CHKNULL(keyctx);
+        BSL_CHKNULL(1 == EVP_PKEY_fromdata_init(keyctx));
 
-        int res = EVP_PKEY_fromdata(keyctx, key, EVP_PKEY_KEYPAIR, params);
-        CHK_PROPERTY(*key);
+        int res = EVP_PKEY_fromdata(keyctx, &key, EVP_PKEY_KEYPAIR, params);
 
         EVP_PKEY_CTX_free(keyctx);
         OSSL_PARAM_free(params);
@@ -765,32 +724,30 @@ static int BSL_SigCtx_CommonInit(BSL_SigCtx_t *ctx, EVP_PKEY **key, char **diges
         if (res != 1)
         {
             BSL_LOG_ERR("Failed to convert EC2 key");
-            EVP_PKEY_free(*key);
-            return BSL_ERR_SECURITY_CONTEXT_CRYPTO_FAILED;
+            if (key)
+            {
+                EVP_PKEY_free(key);
+                key = NULL;
+            }
         }
     }
     else if (key_kty == BSL_CRYPTO_KEYPARAM_TYPE_AKP)
     {
-        const BSL_Crypto_ExtHash_Data_t *libctx = ctx->libctx;
-        CHK_PRECONDITION(libctx);
-
-        const BSL_Variant_t *key_pub_var =
-            BSL_KeyStore_State.get_parameter(ctx->keyhandle, BSL_CRYPTO_KEYPARAM_AKP_PUB);
-        CHK_PRECONDITION(key_pub_var);
+        const BSL_Variant_t *key_pub_var = BSL_KeyStore_State.get_parameter(handle, BSL_CRYPTO_KEYPARAM_AKP_PUB);
+        BSL_CHKNULL(key_pub_var);
         BSL_Data_t key_pub;
-        CHK_PRECONDITION(BSL_SUCCESS == BSL_Variant_GetAsBytestr(key_pub_var, &key_pub));
+        BSL_CHKNULL(BSL_SUCCESS == BSL_Variant_GetAsBytestr(key_pub_var, &key_pub));
 
-        const BSL_Variant_t *key_priv_var =
-            BSL_KeyStore_State.get_parameter(ctx->keyhandle, BSL_CRYPTO_KEYPARAM_AKP_PRIV);
+        const BSL_Variant_t *key_priv_var = BSL_KeyStore_State.get_parameter(handle, BSL_CRYPTO_KEYPARAM_AKP_PRIV);
         // present only for private keys
         BSL_Data_t key_priv = BSL_DATA_INIT_NULL;
         if (key_priv_var)
         {
-            CHK_PRECONDITION(BSL_SUCCESS == BSL_Variant_GetAsBytestr(key_priv_var, &key_priv));
+            BSL_CHKNULL(BSL_SUCCESS == BSL_Variant_GetAsBytestr(key_priv_var, &key_priv));
         }
 
         OSSL_PARAM_BLD *param_bld = OSSL_PARAM_BLD_new();
-        CHK_PRECONDITION(param_bld);
+        BSL_CHKNULL(param_bld);
 
         OSSL_PARAM_BLD_push_octet_string(param_bld, OSSL_PKEY_PARAM_PUB_KEY, key_pub.ptr, key_pub.len);
 #if OPENSSL_CAN_MLDSA // guard use of define names
@@ -802,15 +759,14 @@ static int BSL_SigCtx_CommonInit(BSL_SigCtx_t *ctx, EVP_PKEY **key, char **diges
 
         OSSL_PARAM *params = OSSL_PARAM_BLD_to_param(param_bld);
         OSSL_PARAM_BLD_free(param_bld);
-        CHK_PRECONDITION(params);
+        BSL_CHKNULL(params);
 
         // algorithm name from key alg
-        EVP_PKEY_CTX *keyctx = EVP_PKEY_CTX_new_from_name(NULL, libctx->sign_name, NULL);
-        CHK_PRECONDITION(keyctx);
-        CHK_PRECONDITION(1 == EVP_PKEY_fromdata_init(keyctx));
+        EVP_PKEY_CTX *keyctx = EVP_PKEY_CTX_new_from_name(NULL, ctx->sign_name, NULL);
+        BSL_CHKNULL(keyctx);
+        BSL_CHKNULL(1 == EVP_PKEY_fromdata_init(keyctx));
 
-        int res = EVP_PKEY_fromdata(keyctx, key, EVP_PKEY_KEYPAIR, params);
-        CHK_PROPERTY(*key);
+        int res = EVP_PKEY_fromdata(keyctx, &key, EVP_PKEY_KEYPAIR, params);
 
         EVP_PKEY_CTX_free(keyctx);
         OSSL_PARAM_free(params);
@@ -818,15 +774,99 @@ static int BSL_SigCtx_CommonInit(BSL_SigCtx_t *ctx, EVP_PKEY **key, char **diges
         if (res != 1)
         {
             BSL_LOG_ERR("Failed to convert AKP key");
-            EVP_PKEY_free(*key);
-            return BSL_ERR_SECURITY_CONTEXT_CRYPTO_FAILED;
+            if (key)
+            {
+                EVP_PKEY_free(key);
+                key = NULL;
+            }
         }
     }
     else
     {
         BSL_LOG_ERR("Unhandled key kty value %" PRId64, key_kty);
-        return BSL_ERR_SECURITY_CONTEXT_CRYPTO_FAILED;
+        return NULL;
     }
+
+    return key;
+}
+
+/** Shared signature context logic between signing and verifying.
+ */
+static int BSL_SigCtx_CommonInit(BSL_SigCtx_t *ctx, EVP_PKEY **key, char **digest_name, bool nonce_deterministic)
+{
+    BSL_AsyncKeyCache_Ctx_t cache_ctx = { 0 };
+
+    switch (ctx->variant)
+    {
+        case BSL_CRYPTO_ECDSA_P256_SHA_256:
+            ctx->mode    = BSL_CRYPTO_SIGNMODE_SEQUENTIAL;
+            cache_ctx.need_kty = BSL_CRYPTO_KEYPARAM_TYPE_EC2;
+            cache_ctx.need_crv = BSL_CRYPTO_KEYPARAM_CRV_P256;
+            cache_ctx.coord_len = ctx->coord_len = 32;
+            *digest_name = SN_sha256;
+            break;
+        case BSL_CRYPTO_ECDSA_P384_SHA_384:
+            ctx->mode    = BSL_CRYPTO_SIGNMODE_SEQUENTIAL;
+            cache_ctx.need_kty = BSL_CRYPTO_KEYPARAM_TYPE_EC2;
+            cache_ctx.need_crv = BSL_CRYPTO_KEYPARAM_CRV_P384;
+            cache_ctx.coord_len = ctx->coord_len = 48;
+            *digest_name = SN_sha384;
+            break;
+        case BSL_CRYPTO_ECDSA_P521_SHA_512:
+            ctx->mode    = BSL_CRYPTO_SIGNMODE_SEQUENTIAL;
+            cache_ctx.need_kty = BSL_CRYPTO_KEYPARAM_TYPE_EC2;
+            cache_ctx.need_crv = BSL_CRYPTO_KEYPARAM_CRV_P521;
+            cache_ctx.coord_len = ctx->coord_len = 66;
+            *digest_name = SN_sha512;
+            break;
+        case BSL_CRYPTO_MLDSA_44:
+        case BSL_CRYPTO_MLDSA_65:
+        case BSL_CRYPTO_MLDSA_87:
+        {
+            ctx->mode    = BSL_CRYPTO_SIGNMODE_EXTHASH;
+            cache_ctx.need_kty = BSL_CRYPTO_KEYPARAM_TYPE_AKP;
+#if OPENSSL_CAN_MLDSA // guard use of define names
+            // digest for data, not signature name
+            *digest_name = SN_shake256;
+
+            BSL_Crypto_ExtHash_Data_t *libctx = BSL_malloc(sizeof(BSL_Crypto_ExtHash_Data_t));
+            ASSERT_PROPERTY(libctx != NULL);
+            memset(libctx, 0, sizeof(BSL_Crypto_ExtHash_Data_t));
+            // actual data
+            libctx->nonce_deterministic = nonce_deterministic;
+            // finalize signature name
+            if (ctx->variant == BSL_CRYPTO_MLDSA_44)
+            {
+                cache_ctx.sign_name = libctx->sign_name = SN_ML_DSA_44;
+            }
+            else if (ctx->variant == BSL_CRYPTO_MLDSA_65)
+            {
+                cache_ctx.sign_name = libctx->sign_name = SN_ML_DSA_65;
+            }
+            else if (ctx->variant == BSL_CRYPTO_MLDSA_87)
+            {
+                cache_ctx.sign_name = libctx->sign_name = SN_ML_DSA_87;
+            }
+
+            ctx->libctx = libctx;
+            break;
+#else
+            // GCOV_EXCL_START
+            (void)nonce_deterministic;
+            return BSL_ERR_SECURITY_CONTEXT_CRYPTO_FAILED;
+            // GCOV_EXCL_STOP
+#endif // OPENSSL_CAN_MLDSA
+        }
+            // GCOV_EXCL_START
+        default:
+            BSL_LOG_ERR("Invalid sign variant %d", ctx->variant);
+            return BSL_ERR_SECURITY_CONTEXT_CRYPTO_FAILED;
+            // GCOV_EXCL_STOP
+    }
+
+    *key = BSL_Crypto_GetKeyUserCache(ctx->keyhandle, (BSL_Crypto_KeyUserCache_f)BSL_AsyncKeyCache, &cache_ctx);
+    BSL_LOG_DEBUG("BSL_Crypto_GetKeyUserCache result %p", *key);
+
     return BSL_SUCCESS;
 }
 

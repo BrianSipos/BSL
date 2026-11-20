@@ -161,3 +161,18 @@ int BSL_Crypto_GetKeyStatistics(BSL_Crypto_KeyHandle_t handle, BSL_Crypto_KeySta
     ASSERT_PRECONDITION(BSL_KeyStore_State.find_key);
     return BSL_KeyStore_State.get_stats(handle, stats);
 }
+
+void * BSL_Crypto_GetKeyUserCache(BSL_Crypto_KeyHandle_t handle, BSL_Crypto_KeyUserCache_f user_cache, const void *ctx)
+{
+    if(!handle || !user_cache)
+    {
+        return NULL;
+    }
+
+    if (!BSL_KeyStore_State.get_user_cache)
+    {
+        BSL_LOG_WARNING("key store provider does not cache user data");
+        return (*user_cache)(handle, ctx);
+    }
+    return BSL_KeyStore_State.get_user_cache(handle, user_cache, ctx);
+}
