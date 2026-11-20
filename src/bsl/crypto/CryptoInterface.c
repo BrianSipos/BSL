@@ -623,6 +623,7 @@ static EVP_PKEY *BSL_AsyncKeyCache(BSL_Crypto_KeyHandle_t handle, const BSL_Asyn
 {
     BSL_CHKNULL(handle);
     BSL_CHKNULL(ctx);
+    BSL_LOG_DEBUG("caching key data for %p", handle);
 
     EVP_PKEY *key = NULL;
 
@@ -652,13 +653,13 @@ static EVP_PKEY *BSL_AsyncKeyCache(BSL_Crypto_KeyHandle_t handle, const BSL_Asyn
         switch (key_crv)
         {
             case BSL_CRYPTO_KEYPARAM_CRV_P256:
-                grp_name       = "P-256";
+                grp_name = "P-256";
                 break;
             case BSL_CRYPTO_KEYPARAM_CRV_P384:
-                grp_name       = "P-384";
+                grp_name = "P-384";
                 break;
             case BSL_CRYPTO_KEYPARAM_CRV_P521:
-                grp_name       = "P-521";
+                grp_name = "P-521";
                 break;
             default:
                 return NULL;
@@ -799,31 +800,31 @@ static int BSL_SigCtx_CommonInit(BSL_SigCtx_t *ctx, EVP_PKEY **key, char **diges
     switch (ctx->variant)
     {
         case BSL_CRYPTO_ECDSA_P256_SHA_256:
-            ctx->mode    = BSL_CRYPTO_SIGNMODE_SEQUENTIAL;
-            cache_ctx.need_kty = BSL_CRYPTO_KEYPARAM_TYPE_EC2;
-            cache_ctx.need_crv = BSL_CRYPTO_KEYPARAM_CRV_P256;
+            ctx->mode           = BSL_CRYPTO_SIGNMODE_SEQUENTIAL;
+            cache_ctx.need_kty  = BSL_CRYPTO_KEYPARAM_TYPE_EC2;
+            cache_ctx.need_crv  = BSL_CRYPTO_KEYPARAM_CRV_P256;
             cache_ctx.coord_len = ctx->coord_len = 32;
-            *digest_name = SN_sha256;
+            *digest_name                         = SN_sha256;
             break;
         case BSL_CRYPTO_ECDSA_P384_SHA_384:
-            ctx->mode    = BSL_CRYPTO_SIGNMODE_SEQUENTIAL;
-            cache_ctx.need_kty = BSL_CRYPTO_KEYPARAM_TYPE_EC2;
-            cache_ctx.need_crv = BSL_CRYPTO_KEYPARAM_CRV_P384;
+            ctx->mode           = BSL_CRYPTO_SIGNMODE_SEQUENTIAL;
+            cache_ctx.need_kty  = BSL_CRYPTO_KEYPARAM_TYPE_EC2;
+            cache_ctx.need_crv  = BSL_CRYPTO_KEYPARAM_CRV_P384;
             cache_ctx.coord_len = ctx->coord_len = 48;
-            *digest_name = SN_sha384;
+            *digest_name                         = SN_sha384;
             break;
         case BSL_CRYPTO_ECDSA_P521_SHA_512:
-            ctx->mode    = BSL_CRYPTO_SIGNMODE_SEQUENTIAL;
-            cache_ctx.need_kty = BSL_CRYPTO_KEYPARAM_TYPE_EC2;
-            cache_ctx.need_crv = BSL_CRYPTO_KEYPARAM_CRV_P521;
+            ctx->mode           = BSL_CRYPTO_SIGNMODE_SEQUENTIAL;
+            cache_ctx.need_kty  = BSL_CRYPTO_KEYPARAM_TYPE_EC2;
+            cache_ctx.need_crv  = BSL_CRYPTO_KEYPARAM_CRV_P521;
             cache_ctx.coord_len = ctx->coord_len = 66;
-            *digest_name = SN_sha512;
+            *digest_name                         = SN_sha512;
             break;
         case BSL_CRYPTO_MLDSA_44:
         case BSL_CRYPTO_MLDSA_65:
         case BSL_CRYPTO_MLDSA_87:
         {
-            ctx->mode    = BSL_CRYPTO_SIGNMODE_EXTHASH;
+            ctx->mode          = BSL_CRYPTO_SIGNMODE_EXTHASH;
             cache_ctx.need_kty = BSL_CRYPTO_KEYPARAM_TYPE_AKP;
 #if OPENSSL_CAN_MLDSA // guard use of define names
             // digest for data, not signature name
@@ -864,8 +865,13 @@ static int BSL_SigCtx_CommonInit(BSL_SigCtx_t *ctx, EVP_PKEY **key, char **diges
             // GCOV_EXCL_STOP
     }
 
-    *key = BSL_Crypto_GetKeyUserCache(ctx->keyhandle, (BSL_Crypto_KeyUserCache_f)BSL_AsyncKeyCache, &cache_ctx);
+    *key = BSL_Crypto_GetKeyUserCache(ctx->keyhandle, (BSL_KeyStore_UserCache_New_f)BSL_AsyncKeyCache, &cache_ctx,
+                                      (BSL_KeyStore_UserCache_Free_f)EVP_PKEY_free);
     BSL_LOG_DEBUG("BSL_Crypto_GetKeyUserCache result %p", *key);
+    if (*key)
+    {
+        EVP_PKEY_up_ref(*key);
+    }
 
     return BSL_SUCCESS;
 }

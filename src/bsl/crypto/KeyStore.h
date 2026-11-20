@@ -78,7 +78,13 @@ typedef struct
  * @param[in] ctx An optional context pointer.
  * @return An optional pointer to user data allocated for the key.
  */
-typedef void * (*BSL_Crypto_KeyUserCache_f)(BSL_Crypto_KeyHandle_t handle, const void *ctx);
+typedef void * (*BSL_KeyStore_UserCache_New_f)(BSL_Crypto_KeyHandle_t handle, const void *ctx);
+
+/** The signature of a user callback function to free cached data for a key.
+ *
+ * @param[in] cache The user data being freed, which will never be null.
+ */
+typedef void (*BSL_KeyStore_UserCache_Free_f)(void *cache);
 
 /** The set of callback function pointers which actually implement
  * a key store.
@@ -166,12 +172,13 @@ typedef struct
     /** Populate a thread-safe user data cache for a single key.
      *
      * @param[in] handle The handle to the key.
-     * @param[in] user_cache The user function used to produce cache data.
+     * @param[in] cache_new The user function used to produce cache data.
      * This pointer will never be null when this callback is called.
-     * @param[in] ctx The context passed to the @c user_cache function.
-     * @return The cached data pointer returned by @c user_cache function.
+     * @param[in] ctx The context passed to the @c cache_new function.
+     * @param[in] cache_free The user function to free cached data.
+     * @return The cached data pointer returned by @c cache_new function.
      */
-    void *(*get_user_cache)(BSL_Crypto_KeyHandle_t handle, BSL_Crypto_KeyUserCache_f user_cache, const void *ctx);
+    void *(*get_user_cache)(BSL_Crypto_KeyHandle_t handle, BSL_KeyStore_UserCache_New_f cache_new, const void *ctx, BSL_KeyStore_UserCache_Free_f cache_free);
 
 } BSL_KeyStore_Descriptors_t;
 
@@ -258,12 +265,13 @@ int BSL_Crypto_GetKeyStatistics(BSL_Crypto_KeyHandle_t handle, BSL_Crypto_KeySta
 /** Retrieve cached user data related to a key.
  *
  * @param[in] handle The handle to the key.
- * @param[in] user_cache The user function used to produce cache data.
+ * @param[in] cache_new The user function used to produce cache data.
  * If this pointer is null the return will also be null.
- * @param[in] ctx The context passed to the @c user_cache function.
- * @return The cached data pointer returned by @c user_cache function.
+ * @param[in] ctx The context passed to the @c cache_new function.
+ * @param[in] cache_free The user function to free cached data.
+ * @return The cached data pointer returned by @c cache_new function.
  */
-void * BSL_Crypto_GetKeyUserCache(BSL_Crypto_KeyHandle_t handle, BSL_Crypto_KeyUserCache_f user_cache, const void *ctx);
+void * BSL_Crypto_GetKeyUserCache(BSL_Crypto_KeyHandle_t handle, BSL_KeyStore_UserCache_New_f cache_new, const void *ctx, BSL_KeyStore_UserCache_Free_f cache_free);
 
 #ifdef __cplusplus
 } // extern C

@@ -47,6 +47,13 @@ typedef struct BSL_CryptoKey_s
     BSL_Crypto_KeyStats_t stats;
     /// Mutex for #stats
     pthread_mutex_t stats_mutex;
+
+    /// User cache storage
+    void *cache_ptr;
+    /// Freeing function for #cache_ptr
+    BSL_KeyStore_UserCache_Free_f cache_free;
+    /// Mutex for #cache_ptr
+    pthread_mutex_t cache_mutex;
 } BSL_CryptoKey_t;
 
 static void BSL_CryptoKey_Init(BSL_CryptoKey_t *key)
@@ -61,6 +68,11 @@ static void BSL_CryptoKey_Init(BSL_CryptoKey_t *key)
         key->stats.stats[i] = 0;
     }
     pthread_mutex_init(&key->stats_mutex, NULL);
+
+    key->cache_ptr = NULL;
+    key->cache_free = NULL;
+    pthread_mutex_init(&key->cache_mutex, NULL);
+
 }
 
 static void BSL_CryptoKey_Deinit(BSL_CryptoKey_t *key)
@@ -74,6 +86,12 @@ static void BSL_CryptoKey_Deinit(BSL_CryptoKey_t *key)
     for (uint64_t i = 0; i < BSL_CRYPTO_KEYSTATS_MAX_INDEX; i++)
     {
         key->stats.stats[i] = 0;
+    }
+
+    pthread_mutex_destroy(&key->cache_mutex);
+    if (key->cache_ptr && key->cache_free)
+    {
+        (key->cache_free)(key->cache_ptr);
     }
 }
 
@@ -305,6 +323,29 @@ static int MockBPA_KeyStore_GetStats(BSL_Crypto_KeyHandle_t handle, BSL_Crypto_K
     return BSL_SUCCESS;
 }
 
+static void * MockBPA_KeyStore_GetUserCache(BSL_Crypto_KeyHandle_t handle, BSL_KeyStore_UserCache_New_f cache_new, const void *ctx, BSL_KeyStore_UserCache_Free_f cache_free)
+{
+    if(!handle)
+    {
+        return NULL;
+    }
+
+    BSL_CryptoKey_t *key = BSL_CryptoKeyPtr_ref(handle);
+
+    void *ptr = NULL;
+    pthread_mutex_lock(&key->cache_mutex);
+    if (!(key->cache_ptr))
+    {
+        key->cache_ptr = cache_new(handle, ctx);
+        key->cache_free = cache_free;
+    }
+    ptr = key->cache_ptr;
+//    key->cache_ptr = NULL;
+    pthread_mutex_unlock(&key->cache_mutex);
+
+    return ptr;
+}
+
 BSL_KeyStore_Descriptors_t MockBPA_KeyStore_Descriptors(void)
 {
     BSL_KeyStore_Descriptors_t desc = {
@@ -319,6 +360,7 @@ BSL_KeyStore_Descriptors_t MockBPA_KeyStore_Descriptors(void)
         .set_parameter = &MockBPA_KeyStore_SetKeyParameter,
         .update_stats  = &MockBPA_KeyStore_UpdateStats,
         .get_stats     = &MockBPA_KeyStore_GetStats,
+        .get_user_cache = &MockBPA_KeyStore_GetUserCache,
     };
     return desc;
 }
